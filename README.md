@@ -2,12 +2,6 @@
 
 Lightweight Flask + SQLite app intended to run on a Raspberry Pi, accessed over the local network. Built to the spec in `expense_tracker_spec.md`.
 
-## Status
-
-**Phase 1 complete:** project scaffold, schema, auth (admin + viewer), first-launch onboarding, neomorphism SPA shell with 8-tab navigation, light/dark theme toggle.
-
-**Phase 2 next:** transactions (CRUD, splits, attachments, soft delete, edit history, duplicates, quick-add templates) + budget engine (unified bucket, category sub-buckets, recurring payments, rollover, savings pot, cascade).
-
 ## Quick start (local dev — Windows or any OS)
 
 ```bash
@@ -41,6 +35,17 @@ sudo systemctl status expense_tracker.service
 ```
 
 Access from any device on the LAN at `http://raspberrypi.local:5000`.
+
+To stop:
+```bash
+sudo systemctl stop expense_tracker.service
+sudo systemctl disable expense_tracker.service
+```
+
+bring it back up:
+```bash
+sudo systemctl enable --now expense_tracker.service
+```
 
 ## Configuration
 
