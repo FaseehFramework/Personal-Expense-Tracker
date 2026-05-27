@@ -1,0 +1,23 @@
+/* Dark mode overrides — keep neomorphism shadows but invert background palette. */
+[data-theme="dark"] {
+  --bg: #2b2f3a;
+  --bg-elevated: #323744;
+  --text: #e7ebf3;
+  --text-muted: #9aa3b2;
+  --accent: #8aa3ff;
+  --accent-soft: #3a4475;
+  --danger: #ff7066;
+  --ok: #5fd39a;
+  --shadow-light: #383d4a;
+  --shadow-dark: #1d2028;
+  --inset-light: inset 4px 4px 8px var(--shadow-dark),
+                 inset -4px -4px 8px var(--shadow-light);
+  --raised: 8px 8px 16px var(--shadow-dark),
+            -8px -8px 16px var(--shadow-light);
+  --raised-sm: 4px 4px 8px var(--shadow-dark),
+               -4px -4px 8px var(--shadow-light);
+}
+
+[data-theme="dark"] body { background: var(--bg); color: var(--text); }
+[data-theme="dark"] .neo-btn-primary { color: #fff; background: var(--accent); }
+[data-theme="dark"] .modal-backdrop { background: rgba(0,0,0,0.55); }

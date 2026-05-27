@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Expense Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dark.css') }}">
+</head>
+<body>
+  <div id="app"
+       data-username="{{ user.username }}"
+       data-role="{{ user.role }}"
+       data-needs-onboarding="{{ '1' if needs_onboarding else '0' }}"
+       data-awaiting-admin="{{ '1' if awaiting_admin else '0' }}">
+
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <span class="brand-mark">◉</span>
+        <span class="brand-text">Expense<br>Tracker</span>
+      </div>
+      <nav class="nav-list" id="nav-list">
+        <a href="#/dashboard" data-tab="dashboard" class="nav-item">Dashboard</a>
+        <a href="#/transactions" data-tab="transactions" class="nav-item">Transactions</a>
+        <a href="#/budget" data-tab="budget" class="nav-item">Budget</a>
+        <a href="#/loans" data-tab="loans" class="nav-item">Loans &amp; Receivables</a>
+        <a href="#/wishlist" data-tab="wishlist" class="nav-item">Wishlist</a>
+        <a href="#/reports" data-tab="reports" class="nav-item">Reports</a>
+        <a href="#/audit" data-tab="audit" class="nav-item">Audit Log</a>
+        <a href="#/settings" data-tab="settings" class="nav-item">Settings</a>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="theme-toggle" class="neo-btn neo-btn-ghost theme-toggle" aria-label="Toggle dark mode">
+          <span class="theme-icon">◐</span>
+        </button>
+        <div class="user-chip">
+          <span class="user-name">{{ user.username }}</span>
+          <span class="user-role">{{ user.role }}</span>
+        </div>
+        <a href="/logout" class="neo-btn neo-btn-ghost logout-link">Sign out</a>
+      </div>
+    </aside>
+
+    <main class="main" id="main">
+      <header class="topbar">
+        <h1 class="page-title" id="page-title">Dashboard</h1>
+        <div class="topbar-spacer"></div>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+
+    <!-- Onboarding modal (Section 15) -->
+    <div id="onboarding-modal" class="modal-backdrop hidden">
+      <div class="neo-card modal-card">
+        <h2>Welcome — let's get set up</h2>
+        <p class="muted">These are your starting balances. Enter them once.</p>
+        <form id="onboarding-form" class="auth-form">
+          <label>Opening Bank balance (AED)
+            <input class="neo-input" type="number" name="opening_bank" min="0" step="0.01" value="0" required>
+          </label>
+          <label>Opening Petty Cash balance (AED)
+            <input class="neo-input" type="number" name="opening_petty" min="0" step="0.01" value="0" required>
+          </label>
+          <label>Monthly budget (AED)
+            <input class="neo-input" type="number" name="monthly_budget" min="1" step="1" value="2500" required>
+          </label>
+          <button type="submit" class="neo-btn neo-btn-primary">Confirm &amp; continue</button>
+          <p class="form-error" id="onboarding-error" role="alert"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/util.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/transactions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/budget.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/loans.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/wishlist.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

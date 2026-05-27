@@ -1,0 +1,17 @@
+[Unit]
+Description=Personal Expense Tracker (Flask)
+After=network.target
+
+[Service]
+Type=simple
+User=fishfrombrazil
+WorkingDirectory=/home/fishfrombrazil/expense-tracker
+Environment="PATH=/home/fishfrombrazil/expense-tracker/.venv/bin"
+Environment="FLASK_APP=app.py"
+Environment="EXPENSE_TRACKER_SECRET=change-this-in-prod"
+ExecStart=/home/fishfrombrazil/expense-tracker/.venv/bin/python -m flask run --host=0.0.0.0 --port=5000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
