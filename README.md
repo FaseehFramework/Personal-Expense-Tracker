@@ -2,6 +2,12 @@
 
 Lightweight Flask + SQLite app intended to run on a Raspberry Pi, accessed over the local network. Built to the spec in `expense_tracker_spec.md`.
 
+## Status
+
+**Phase 1 complete:** project scaffold, schema, auth (admin + viewer), first-launch onboarding, neomorphism SPA shell with 8-tab navigation, light/dark theme toggle.
+
+**Phase 2 next:** transactions (CRUD, splits, attachments, soft delete, edit history, duplicates, quick-add templates) + budget engine (unified bucket, category sub-buckets, recurring payments, rollover, savings pot, cascade).
+
 ## Quick start (local dev — Windows or any OS)
 
 ```bash
@@ -13,6 +19,35 @@ python app.py
 ```
 
 Open <http://localhost:5000>. On first launch you'll be asked to create the **admin** and **viewer** accounts; after admin login the onboarding modal collects opening balances and the starting monthly budget.
+
+## Deploying to a new device (clean slate)
+
+The SQLite file and uploaded attachments are runtime state — they're listed in `.gitignore` and should never travel with the code. A fresh device gets a fresh DB automatically on first boot.
+
+```bash
+# On the new device:
+git clone <repo> ~/expense-tracker
+cd ~/expense-tracker
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+python app.py
+```
+
+Visit the URL — the first-launch wizard creates the Admin + Viewer accounts and runs onboarding. The schema (`database/schema.sql`) is applied automatically by `init_db()` in `database/__init__.py`, so there is no manual migration step.
+
+## Wiping an existing deployment back to factory state
+
+Use the reset script when you want to clear all data from a running installation (e.g. before handing the device to someone else, or to scrap a test setup):
+
+```bash
+# Prompts for confirmation:
+python -m scripts.reset_db
+
+# Or non-interactively, with a timestamped backup saved under database/backups/:
+python -m scripts.reset_db --yes --backup
+```
+
+This deletes `database/expense_tracker.sqlite` (plus any WAL/journal siblings) and every file under `static/uploads/`. Stop the running app first so it isn't holding the DB open. Next boot recreates a fresh DB from `schema.sql` and re-runs the first-launch wizard.
 
 ## Raspberry Pi deployment
 
