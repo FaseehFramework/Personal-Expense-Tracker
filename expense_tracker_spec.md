@@ -1,11 +1,4 @@
 # Personal Expense Tracker — Full Build Specification
-
-## Context for Claude Code
-
-This document is a complete product specification derived from an extended design conversation. You have no knowledge of that conversation, so treat this document as the single source of truth. Build exactly what is described here — nothing more, nothing less. Where implementation decisions are not specified, use your best judgement but document your choices clearly in comments.
-
-Do not start with a partial implementation. Read the entire spec before writing a single line of code.
-
 ---
 
 ## 1. Infrastructure & Stack
