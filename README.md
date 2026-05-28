@@ -2,11 +2,6 @@
 
 Lightweight Flask + SQLite app intended to run on a Raspberry Pi, accessed over the local network. Built to the spec in `expense_tracker_spec.md`.
 
-## Status
-
-**Phase 1 complete:** project scaffold, schema, auth (admin + viewer), first-launch onboarding, neomorphism SPA shell with 8-tab navigation, light/dark theme toggle.
-
-**Phase 2 next:** transactions (CRUD, splits, attachments, soft delete, edit history, duplicates, quick-add templates) + budget engine (unified bucket, category sub-buckets, recurring payments, rollover, savings pot, cascade).
 
 ## Quick start (local dev — Windows or any OS)
 
@@ -100,9 +95,53 @@ All monetary values are stored in the database as **integer fils** (1 AED = 100 
 ## Database
 
 - SQLite file: `database/expense_tracker.sqlite` (created on first run)
-- Schema: `database/schema.sql`
-- Backups: download on demand from the Reports tab (Phase 4)
+- Schema lives as numbered migrations under `database/migrations/`
+- Backups: download on demand from the Reports tab, or use `scripts/reset_db.py --backup`, or use `scripts/migrate.py --backup`
+
+## Schema migrations
+
+The schema is maintained as numbered `.sql` files under `database/migrations/`. The runner records which files have been applied in a `schema_migrations` table and skips them on subsequent runs. `init_db()` runs the runner on every Flask boot, so just deploying new code is enough — but for risky changes you should run migrations manually with the service stopped.
+
+**Applying migrations on a deployed Pi:**
+
+```bash
+sudo systemctl stop expense_tracker.service
+cd ~/expense-tracker
+git pull
+.venv/bin/pip install -r requirements.txt    # only if requirements.txt changed
+.venv/bin/python -m scripts.migrate --status # see what would apply
+.venv/bin/python -m scripts.migrate --backup --yes
+sudo systemctl start expense_tracker.service
+```
+
+The `--backup` flag drops a timestamped copy under `database/backups/` before applying. For purely additive migrations (new tables, indexes) you can skip the stop/start step — SQLite handles concurrent reads and writes are unaffected. For column changes or backfills, always stop the service.
+
+**Writing a new migration:**
+
+Drop a new file in `database/migrations/` named with the next four-digit sequence number, snake_case body, `.sql` extension. The runner enforces this format. Example — adding a `tag` column to receivables and backfilling existing rows:
+
+```sql
+-- database/migrations/0002_add_receivable_tag.sql
+ALTER TABLE receivables ADD COLUMN tag TEXT;
+UPDATE receivables SET tag = 'legacy' WHERE tag IS NULL;
+```
+
+Guidelines:
+- Prefer idempotent SQL — `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`. SQLite does not support `ALTER TABLE … IF NOT EXISTS COLUMN`, so column additions only run once; the tracking table prevents re-execution.
+- Each file runs as a single `executescript()` — multiple statements separated by `;` are fine.
+- Keep migrations small and focused so a failure is easier to triage. The runner aborts on the first failing migration; statements before the failure may have committed, so write recoverable SQL.
+- Never edit a migration that has already been applied to any deployment. Add a new migration that corrects it.
+
+**Useful CLI flags:**
+
+```bash
+python -m scripts.migrate                # apply pending (prompts to confirm)
+python -m scripts.migrate --yes          # no prompt
+python -m scripts.migrate --backup       # snapshot DB to database/backups/ first
+python -m scripts.migrate --dry-run      # list pending, apply nothing
+python -m scripts.migrate --status       # show applied history + pending count
+```
 
 ## File layout
 
-See `expense_tracker_spec.md` §20.
+See `expense_tracker_spec.md`.
