@@ -28,15 +28,18 @@ def close_db(_exc=None) -> None:
 
 
 def init_db() -> None:
-    """Create schema on first run."""
+    """Ensure storage dirs exist and apply any pending migrations.
+
+    Runs on every Flask boot. The migration runner is idempotent — files
+    already recorded in `schema_migrations` are skipped, so existing Pi
+    deployments pick up new migrations transparently on next start.
+    """
     Path(Config.DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
     Path(Config.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
-    with open(Config.SCHEMA_PATH, "r", encoding="utf-8") as f:
-        schema = f.read()
+    from database.migrate import apply_pending
     conn = _connect(Config.DATABASE_PATH)
     try:
-        conn.executescript(schema)
-        conn.commit()
+        apply_pending(conn, log=lambda msg: None)  # quiet on normal boot
     finally:
         conn.close()
 

@@ -139,7 +139,7 @@
       e.preventDefault();
       const f = e.currentTarget;
       const rr = await api(`/api/loans/${loanId}/payments`, { method: "POST", body: {
-        date: f.date.value, amount: parseFloat(f.amount.value), source: f.source.value, notes: f.notes.value,
+        date: f.date.value, amount: window.U.moneyStr(f.amount), source: f.source.value, notes: f.notes.value,
       }});
       if (!rr.ok) { toast(rr.data?.error || "Failed", "error"); return; }
       m.close(); toast("Payment recorded"); if (onChange) onChange();
@@ -178,7 +178,7 @@
       const f = e.currentTarget;
       const r = await api("/api/loans", { method: "POST", body: {
         direction, party_description: f.party_description.value,
-        amount: parseFloat(f.amount.value), date: f.date.value,
+        amount: window.U.moneyStr(f.amount), date: f.date.value,
         source: f.source.value, notes: f.notes.value,
       }});
       if (!r.ok) { document.getElementById("loan-err").textContent = r.data?.error || "Failed"; return; }
@@ -205,7 +205,7 @@
       e.preventDefault();
       const f = e.currentTarget;
       const r = await api("/api/receivables", { method: "POST", body: {
-        description: f.description.value, amount: parseFloat(f.amount.value),
+        description: f.description.value, amount: window.U.moneyStr(f.amount),
         date: f.date.value, month: f.month.value,
       }});
       if (!r.ok) { document.getElementById("rec-err").textContent = r.data?.error || "Failed"; return; }

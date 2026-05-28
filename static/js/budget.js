@@ -87,13 +87,16 @@
       const amt = wrap.querySelector(`[data-cbamt="${id}"]`);
       sl.addEventListener("input", () => { amt.value = (parseInt(sl.value,10)/100).toFixed(2); });
       sl.addEventListener("change", async () => {
-        const r = await api(`/api/budget/categories/${id}`, { method: "PUT", body: { amount: parseFloat(amt.value) }});
+        const r = await api(`/api/budget/categories/${id}`, { method: "PUT", body: { amount: window.U.moneyStr(amt) }});
         if (!r.ok) toast(r.data?.error || "Adjust failed", "error");
         else toast("Adjusted");
       });
       amt.addEventListener("change", async () => {
-        sl.value = Math.round(parseFloat(amt.value) * 100);
-        const r = await api(`/api/budget/categories/${id}`, { method: "PUT", body: { amount: parseFloat(amt.value) }});
+        // Keep the slider in sync with the typed value; parseFloat is fine here
+        // because it's a UI side-effect, not the value sent on the wire.
+        const numeric = parseFloat(amt.value);
+        if (!Number.isNaN(numeric)) sl.value = Math.round(numeric * 100);
+        const r = await api(`/api/budget/categories/${id}`, { method: "PUT", body: { amount: window.U.moneyStr(amt) }});
         if (!r.ok) toast(r.data?.error || "Adjust failed", "error");
         else toast("Adjusted");
       });
@@ -137,7 +140,7 @@
     document.getElementById("bg-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = e.currentTarget;
-      const r = await api("/api/budget/monthly", { method: "PUT", body: { month: f.month.value, amount: parseFloat(f.amount.value) }});
+      const r = await api("/api/budget/monthly", { method: "PUT", body: { month: f.month.value, amount: window.U.moneyStr(f.amount) }});
       if (!r.ok) { toast(r.data?.error || "Failed", "error"); return; }
       m.close(); toast("Budget updated"); if (onSave) onSave();
     });
@@ -163,7 +166,7 @@
       e.preventDefault();
       const f = e.currentTarget;
       const r = await api("/api/budget/categories", { method: "POST", body: {
-        month, category_id: parseInt(f.category_id.value,10), amount: parseFloat(f.amount.value)
+        month, category_id: parseInt(f.category_id.value,10), amount: window.U.moneyStr(f.amount)
       }});
       if (!r.ok) { document.getElementById("ac-err").textContent = r.data?.error || "Failed"; return; }
       m.close(); toast("Allocated"); if (onSave) onSave();
@@ -194,7 +197,7 @@
       e.preventDefault();
       const f = e.currentTarget;
       const r = await api("/api/budget/recurring", { method: "POST", body: {
-        description: f.description.value, amount: parseFloat(f.amount.value),
+        description: f.description.value, amount: window.U.moneyStr(f.amount),
         source: f.source.value, category_id: f.category_id.value ? parseInt(f.category_id.value,10) : null,
         start_date: f.start_date.value,
       }});

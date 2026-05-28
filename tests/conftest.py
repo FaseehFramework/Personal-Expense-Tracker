@@ -8,15 +8,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-SCHEMA_PATH = ROOT / "database" / "schema.sql"
-
 
 def _new_db() -> sqlite3.Connection:
+    """Fresh in-memory SQLite with all migrations applied — same code path
+    a real Pi boot uses, so tests catch migration bugs."""
+    from database.migrate import apply_pending
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-        conn.executescript(f.read())
+    apply_pending(conn, log=lambda msg: None)
     return conn
 
 

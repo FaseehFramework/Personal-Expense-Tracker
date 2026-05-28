@@ -386,6 +386,30 @@ def update_transaction(tx_id: int):
     if errors:
         return jsonify(error="; ".join(errors)), 400
 
+    # Linked transactions are owned by a source record (loan, receivable,
+    # recurring, wishlist). The source record's bookkeeping (loan totals,
+    # savings draws, wallet balances baked into the source) would drift if we
+    # let raw transaction edits change the financial shape here. We allow
+    # cosmetic edits (date, description, memo, category) and reject changes to
+    # amount / type / source — the user must edit the source record instead.
+    if tx["linked_type"]:
+        locked = {
+            "amount": (int(tx["amount"]), clean["amount"]),
+            "type":   (tx["type"], clean["type"]),
+            "source": (tx["source"], clean["source"]),
+        }
+        for field, (old, new) in locked.items():
+            if str(old) != str(new):
+                return jsonify(
+                    error=(
+                        f"this transaction is linked to a {tx['linked_type']} "
+                        f"(#{tx['linked_id']}); to change {field}, edit the "
+                        f"{tx['linked_type']} record in its own tab."
+                    ),
+                    linked_type=tx["linked_type"],
+                    linked_id=tx["linked_id"],
+                ), 409
+
     # §5.8 edit history — log each changed field.
     tracked_fields = ("date", "amount", "type", "source", "category_id", "description", "memo")
     for f in tracked_fields:
@@ -442,6 +466,15 @@ def revert_to_edit(tx_id: int, edit_id: int):
         return jsonify(error="cannot revert this field"), 400
 
     tx = db.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
+    # Linked transactions: same lockout as plain edits — financial fields are
+    # owned by the source record (loan/receivable/wishlist/recurring).
+    if tx["linked_type"] and field in ("amount", "type", "source"):
+        return jsonify(
+            error=(
+                f"cannot revert '{field}' on a linked transaction; "
+                f"edit the {tx['linked_type']} record instead."
+            ),
+        ), 409
     old_value = tx[field]
     new_value = edit["old_value"]
 

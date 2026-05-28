@@ -70,7 +70,7 @@
     list.querySelectorAll("button[data-rid]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const rid = btn.dataset.rid;
-        const amt = parseFloat(document.getElementById(`rec-amt-${rid}`).value);
+        const amt = window.U.moneyStr(document.getElementById(`rec-amt-${rid}`));
         btn.disabled = true;
         const r = await api(`/api/budget/recurring/${rid}/confirm`, { method: "POST", body: { amount: amt } });
         if (!r.ok) { window.U.toast(r.data.error || "Failed", "error"); btn.disabled = false; return; }

@@ -71,5 +71,53 @@
     return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
   }
 
-  window.U = { api, fmtAED, fmtDate, el, modal, toast, escapeHtml, debounce };
+  // ---- money input helpers ----
+  // Money values cross the wire as STRINGS, never floats. parseFloat round-trips
+  // through IEEE 754 and lost-precision tickets in this app trace to spinner /
+  // scroll-wheel accumulation on type=number inputs (e.g. 200 - 9*0.01 = 199.91
+  // exactly in IEEE 754). The Python backend's aed_to_fils accepts strings and
+  // converts them via Decimal, so a string round-trip is lossless.
+  function moneyStr(input) {
+    if (!input) return "";
+    const raw = (input.value ?? "").toString().trim();
+    return raw;
+  }
+
+  // Apply on the document once: prevent scroll-wheel from accidentally changing
+  // a focused number input, and snap to 2dp on blur so the displayed value
+  // matches what will be submitted.
+  function installMoneyInputGuards() {
+    if (document.__moneyInputGuardsInstalled) return;
+    document.__moneyInputGuardsInstalled = true;
+
+    document.addEventListener("wheel", (e) => {
+      const t = e.target;
+      if (t && t.tagName === "INPUT" && t.type === "number" && t === document.activeElement) {
+        // Stop the spinner from incrementing/decrementing on scroll.
+        t.blur();
+      }
+    }, { passive: true });
+
+    document.addEventListener("blur", (e) => {
+      const t = e.target;
+      if (!t || t.tagName !== "INPUT" || t.type !== "number") return;
+      // Only normalize fields the dev opts in via step="0.01" (money fields).
+      if (t.step !== "0.01") return;
+      const v = t.value.trim();
+      if (v === "") return;
+      // Use Decimal-safe parsing: avoid parseFloat's IEEE drift on the visible value.
+      // We just snap textually if it's a clean decimal; otherwise let the form's
+      // own validation flag it.
+      const m = v.match(/^-?\d+(\.\d+)?$/);
+      if (!m) return;
+      const [whole, frac = ""] = v.replace(/^-/, "").split(".");
+      const fracPadded = (frac + "00").slice(0, 2);
+      t.value = (v.startsWith("-") ? "-" : "") + whole + "." + fracPadded;
+    }, true);
+  }
+  // Auto-install on script load.
+  if (document.readyState !== "loading") installMoneyInputGuards();
+  else document.addEventListener("DOMContentLoaded", installMoneyInputGuards);
+
+  window.U = { api, fmtAED, fmtDate, el, modal, toast, escapeHtml, debounce, moneyStr };
 })();

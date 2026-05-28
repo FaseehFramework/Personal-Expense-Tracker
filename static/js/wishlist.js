@@ -40,7 +40,7 @@
 
     document.getElementById("btn-new")?.addEventListener("click", () => promptNew(() => render(container)));
     document.querySelectorAll("[data-act]").forEach(b => {
-      b.addEventListener("click", () => openActions(parseInt(b.dataset.id, 10), () => render(container)));
+      b.addEventListener("click", () => openActions(parseInt(b.dataset.act, 10), () => render(container)));
     });
   }
 
@@ -80,7 +80,7 @@
       e.preventDefault();
       const f = e.currentTarget;
       const r = await api("/api/wishlist", { method: "POST", body: {
-        item_name: f.item_name.value, estimated_amount: parseFloat(f.estimated_amount.value),
+        item_name: f.item_name.value, estimated_amount: window.U.moneyStr(f.estimated_amount),
         target_month: f.target_month.value, notes: f.notes.value,
       }});
       if (!r.ok) { document.getElementById("wl-err").textContent = r.data?.error || "Failed"; return; }
@@ -140,7 +140,7 @@
       const f = e.currentTarget;
       const body = {
         date: f.date.value, source: f.source.value,
-        actual_amount: parseFloat(f.actual_amount.value),
+        actual_amount: window.U.moneyStr(f.actual_amount),
         category_id: f.category_id.value ? parseInt(f.category_id.value, 10) : null,
       };
       let r = await api(`/api/wishlist/${wid}/purchase`, { method: "POST", body });

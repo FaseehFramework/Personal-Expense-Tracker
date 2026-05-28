@@ -186,10 +186,12 @@
       description: "", memo: "", splits: [],
     };
 
+    let linkedMeta = null;  // {type, id} when editing a linked transaction
     if (isEdit) {
       const r = await api(`/api/transactions/${txId}`);
       if (!r.ok) { toast("Could not load transaction", "error"); return; }
       const tx = r.data.transaction;
+      if (tx.linked_type) linkedMeta = { type: tx.linked_type, id: tx.linked_id };
       initial = {
         date: tx.date, type: tx.type, source: tx.source,
         amount: (tx.amount/100).toFixed(2),
@@ -205,22 +207,32 @@
       initial.type = "expense";
     }
 
+    const lockedAttr = linkedMeta ? "disabled" : "";
+    const linkedBanner = linkedMeta ? `
+      <div class="linked-warn" style="margin-bottom:12px">
+        This transaction is linked to a <strong>${escapeHtml(linkedMeta.type)}</strong>
+        (#${linkedMeta.id}). To change <strong>amount</strong>, <strong>type</strong>, or
+        <strong>source</strong>, edit the ${escapeHtml(linkedMeta.type)} record in its own tab.
+        You can still update the date, category, description, memo, and attachment here.
+      </div>` : "";
+
     const html = `
       <h2>${isEdit ? "Edit" : "New"} transaction</h2>
+      ${linkedBanner}
       <form id="tx-form" enctype="multipart/form-data">
         <div class="grid-2">
           <label>Date <input class="neo-input" name="date" type="date" value="${initial.date}" required></label>
           <label>Type
-            <select class="neo-input" name="type" required>
+            <select class="neo-input" name="type" required ${lockedAttr}>
               ${Object.entries(TX_TYPE_LABELS).map(([k,v]) =>
                 `<option value="${k}" ${k===initial.type?'selected':''}>${v}</option>`).join("")}
             </select>
           </label>
           <label>Amount (AED)
-            <input class="neo-input" name="amount" type="number" step="0.01" min="0.01" value="${initial.amount}" required>
+            <input class="neo-input" name="amount" type="number" step="0.01" min="0.01" value="${initial.amount}" required ${lockedAttr}>
           </label>
           <label>Source
-            <select class="neo-input" name="source" required>
+            <select class="neo-input" name="source" required ${lockedAttr}>
               <option value="bank" ${initial.source==='bank'?'selected':''}>Bank</option>
               <option value="petty" ${initial.source==='petty'?'selected':''}>Petty Cash</option>
             </select>
@@ -306,13 +318,13 @@
         date: f.date.value,
         type: f.type.value,
         source: f.source.value,
-        amount: parseFloat(f.amount.value),
+        amount: window.U.moneyStr(f.amount),
         category_id: f.category_id.value ? parseInt(f.category_id.value,10) : null,
         description: f.description.value.trim(),
         memo: f.memo.value.trim(),
         splits: splits.map(s => ({
           category_id: s.category_id ? parseInt(s.category_id,10) : null,
-          amount: parseFloat(s.amount) || 0,
+          amount: (s.amount ?? "").toString().trim() || "0",
           memo: s.memo,
         })),
       };
@@ -340,7 +352,7 @@
       }
 
       if (!isEdit && r.data.offer_template) {
-        if (confirm(`Save this as a quick-add template? (${body.description} — AED ${body.amount.toFixed(2)})`)) {
+        if (confirm(`Save this as a quick-add template? (${body.description} — AED ${body.amount})`)) {
           await api("/api/templates", { method: "POST", body: {
             description: body.description, amount: body.amount,
             source: body.source, category_id: body.category_id,

@@ -34,9 +34,9 @@
       const err = document.getElementById("onboarding-error"); err.textContent = "";
       const fd = new FormData(e.currentTarget);
       const body = {
-        opening_bank: parseFloat(fd.get("opening_bank")) || 0,
-        opening_petty: parseFloat(fd.get("opening_petty")) || 0,
-        monthly_budget: parseFloat(fd.get("monthly_budget")) || 0,
+        opening_bank: (fd.get("opening_bank") ?? "0").toString().trim() || "0",
+        opening_petty: (fd.get("opening_petty") ?? "0").toString().trim() || "0",
+        monthly_budget: (fd.get("monthly_budget") ?? "0").toString().trim() || "0",
       };
       const r = await window.U.api("/api/onboarding/complete", { method: "POST", body });
       if (!r.ok) { err.textContent = r.data?.error || "Could not complete"; return; }
