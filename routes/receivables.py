@@ -3,6 +3,11 @@ Receivables blueprint — Section 7.
 Off-budget while outstanding. Settlement creates an off-budget inflow into
 the chosen wallet. Convert-to-expense retroactively books an expense in the
 original month (with cascade-aware re-close of any already-sealed months).
+
+Entry point: Receivables are no longer created here directly.
+They are created by logging a transaction with type='receivable' in the
+Transactions tab. The POST /api/receivables endpoint has been removed (§7 change).
+This blueprint now handles: listing, settlement, conversion, and deletion only.
 """
 from flask import Blueprint, jsonify, request
 
@@ -41,39 +46,24 @@ def list_receivables():
 
 @bp.post("")
 @admin_required
-def create_receivable():
-    data = request.get_json(silent=True) or {}
-    description = (data.get("description") or "").strip()
-    if not description:
-        return jsonify(error="description required"), 400
-    try:
-        amount = aed_to_fils(data.get("amount"))
-    except (ValueError, ArithmeticError):
-        return jsonify(error="amount required"), 400
-    if amount <= 0:
-        return jsonify(error="amount must be positive"), 400
-
-    date_logged = (data.get("date") or today().isoformat()).strip()
-    month = (data.get("month") or "").strip() or date_logged[:7]
-
-    db = get_db()
-    cur = db.execute(
-        "INSERT INTO receivables (description, amount, date_logged, month) VALUES (?, ?, ?, ?)",
-        (description, amount, date_logged, month),
-    )
-    db.execute(
-        "INSERT INTO audit_log (event_type, description, related_type, related_id) "
-        "VALUES ('receivable_create', ?, 'receivable', ?)",
-        (f"Logged receivable '{description}' AED {amount/100:.2f} for {month}", cur.lastrowid),
-    )
-    db.commit()
-    return jsonify(id=cur.lastrowid), 201
+def create_receivable_removed():
+    """§7 (updated): receivables are now created via the Transactions tab.
+    Log a transaction with type='receivable' — the receivable row is auto-created.
+    This endpoint is no longer an entry point and returns 410 Gone."""
+    return jsonify(
+        error=(
+            "Direct receivable creation has been removed. "
+            "Log a transaction with type='receivable' in the Transactions tab instead."
+        )
+    ), 410
 
 
 @bp.post("/<int:rid>/settle")
 @admin_required
 def settle_receivable(rid: int):
-    """Settlement (§7.3) — full only. Destination chooses Bank or Petty."""
+    """Settlement (§7.3) — full only. Destination chooses Bank or Petty.
+    Credits the reimbursement amount back to the chosen wallet as an off-budget
+    income transaction."""
     data = request.get_json(silent=True) or {}
     destination = (data.get("destination") or "").strip().lower()
     if destination not in ("bank", "petty"):
@@ -87,7 +77,8 @@ def settle_receivable(rid: int):
         return jsonify(error=f"cannot settle (current status: {r['status']})"), 400
 
     settle_date = (data.get("date") or today().isoformat()).strip()
-    # Off-budget inflow into the chosen wallet.
+
+    # Off-budget inflow into the chosen wallet (reimbursement credit).
     tx_type = "income_bank" if destination == "bank" else "income_petty_external"
     cur = db.execute(
         "INSERT INTO transactions (date, amount, type, source, description, linked_type, linked_id) "
@@ -103,7 +94,11 @@ def settle_receivable(rid: int):
     db.execute(
         "INSERT INTO audit_log (event_type, description, related_type, related_id) "
         "VALUES ('receivable_settle', ?, 'receivable', ?)",
-        (f"Settled receivable #{rid} into {destination}", rid),
+        (
+            f"Settled receivable #{rid} '{r['description']}' "
+            f"AED {r['amount']/100:.2f} into {destination} on {settle_date}",
+            rid,
+        ),
     )
     db.commit()
     return jsonify(ok=True, transaction_id=cur.lastrowid)
@@ -114,7 +109,10 @@ def settle_receivable(rid: int):
 def convert_to_expense(rid: int):
     """§7.4 — convert an unreimbursed receivable into a retroactive expense.
     Books the expense in the receivable's original month and, if that month
-    was already closed, replays the close-month cascade forward."""
+    was already closed, replays the close-month cascade forward.
+    If the receivable was created via a transaction (has transaction_id), that
+    transaction's type is updated from 'receivable' to 'expense' so it appears
+    as a budget-consuming item in the transaction list."""
     db = get_db()
     r = db.execute("SELECT * FROM receivables WHERE id = ?", (rid,)).fetchone()
     if not r:
@@ -122,13 +120,29 @@ def convert_to_expense(rid: int):
     if r["status"] != "outstanding":
         return jsonify(error=f"cannot convert (current status: {r['status']})"), 400
 
-    # Land the expense on the receivable's logged date so it falls in its month.
-    cur = db.execute(
-        "INSERT INTO transactions (date, amount, type, source, description, linked_type, linked_id) "
-        "VALUES (?, ?, 'expense', 'bank', ?, 'receivable', ?)",
-        (r["date_logged"], r["amount"], f"Converted receivable: {r['description']}", rid),
-    )
-    tx_id = cur.lastrowid
+    # If this receivable was created via the Transactions tab, update the
+    # existing transaction's type to 'expense' so the transaction list reflects
+    # the reclassification. We also update source to the same source used when
+    # the receivable was originally logged (preserved on the tx row).
+    if r["transaction_id"]:
+        db.execute(
+            "UPDATE transactions SET type = 'expense', updated_at = datetime('now') WHERE id = ?",
+            (r["transaction_id"],),
+        )
+        db.execute(
+            "INSERT INTO transaction_edits (transaction_id, field_name, old_value, new_value) "
+            "VALUES (?, 'type', 'receivable', 'expense')",
+            (r["transaction_id"],),
+        )
+        tx_id = r["transaction_id"]
+    else:
+        # Legacy receivable (no linked transaction) — create a new expense transaction.
+        cur = db.execute(
+            "INSERT INTO transactions (date, amount, type, source, description, linked_type, linked_id) "
+            "VALUES (?, ?, 'expense', 'bank', ?, 'receivable', ?)",
+            (r["date_logged"], r["amount"], f"Converted receivable: {r['description']}", rid),
+        )
+        tx_id = cur.lastrowid
 
     db.execute(
         "UPDATE receivables SET status = 'converted', converted_at = datetime('now') WHERE id = ?",
@@ -147,10 +161,17 @@ def convert_to_expense(rid: int):
             pot_went_negative = True
             _log_negative_pot(db, rid, r, old_pot, new_pot, replayed)
 
+    cascade_triggered = bool(replayed)
     db.execute(
         "INSERT INTO audit_log (event_type, description, related_type, related_id) "
         "VALUES ('receivable_convert', ?, 'receivable', ?)",
-        (f"Converted receivable #{rid} to expense AED {r['amount']/100:.2f} for {r['month']}", rid),
+        (
+            f"Converted receivable #{rid} '{r['description']}' to expense "
+            f"AED {r['amount']/100:.2f} for {r['month']}; "
+            f"cascade_triggered={'yes' if cascade_triggered else 'no'}; "
+            f"affected_months={', '.join(replayed) if replayed else 'none'}",
+            rid,
+        ),
     )
     db.commit()
     return jsonify(
@@ -202,17 +223,38 @@ def _log_negative_pot(db, rid: int, r, old_pot: int, new_pot: int, replayed: lis
 @bp.delete("/<int:rid>")
 @admin_required
 def delete_receivable(rid: int):
+    """Delete an outstanding receivable.
+
+    For new-style receivables (created via the Transactions tab, transaction_id set):
+    the linked transaction is also soft-deleted; the user must delete from the
+    Transactions tab to remove the transaction proper (or it can be done here).
+
+    For legacy receivables (transaction_id = NULL): deletes the receivable record only.
+    """
     db = get_db()
-    r = db.execute("SELECT status FROM receivables WHERE id = ?", (rid,)).fetchone()
+    r = db.execute("SELECT * FROM receivables WHERE id = ?", (rid,)).fetchone()
     if not r:
         return jsonify(error="not found"), 404
     if r["status"] != "outstanding":
         return jsonify(error="only outstanding receivables can be deleted"), 400
+
+    # If linked to a transaction, soft-delete that transaction too.
+    if r["transaction_id"]:
+        db.execute(
+            "UPDATE transactions SET is_deleted = 1, deleted_at = datetime('now') WHERE id = ?",
+            (r["transaction_id"],),
+        )
+        db.execute(
+            "INSERT INTO audit_log (event_type, description, related_type, related_id) "
+            "VALUES ('transaction_delete', ?, 'transaction', ?)",
+            (f"Soft-deleted tx #{r['transaction_id']} (linked receivable #{rid} deleted)", r["transaction_id"]),
+        )
+
     db.execute("DELETE FROM receivables WHERE id = ?", (rid,))
     db.execute(
         "INSERT INTO audit_log (event_type, description, related_type, related_id) "
         "VALUES ('receivable_delete', ?, 'receivable', ?)",
-        (f"Deleted outstanding receivable #{rid}", rid),
+        (f"Deleted outstanding receivable #{rid} '{r['description']}'", rid),
     )
     db.commit()
     return jsonify(ok=True)

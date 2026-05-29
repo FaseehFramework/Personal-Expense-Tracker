@@ -326,6 +326,33 @@ def create_transaction():
         (f"{clean['type']} {clean['amount']/100:.2f} — {clean['description']}", tx_id),
     )
 
+    # §7 — Receivable auto-creation: when a transaction is logged with type
+    # 'receivable', automatically create the linked receivables row so that
+    # the Loans & Receivables tab shows it for settlement management.
+    # The two records are kept in sync via the transaction_id FK.
+    if clean["type"] == "receivable":
+        month = clean["date"][:7]
+        rec_cur = db.execute(
+            "INSERT INTO receivables (description, amount, date_logged, month, transaction_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (clean["description"], clean["amount"], clean["date"], month, tx_id),
+        )
+        rec_id = rec_cur.lastrowid
+        # Also update the transaction to reference back to its receivable record.
+        db.execute(
+            "UPDATE transactions SET linked_type = 'receivable', linked_id = ? WHERE id = ?",
+            (rec_id, tx_id),
+        )
+        db.execute(
+            "INSERT INTO audit_log (event_type, description, related_type, related_id) "
+            "VALUES ('receivable_created', ?, 'receivable', ?)",
+            (
+                f"Receivable created via transaction #{tx_id}: "
+                f"'{clean['description']}' AED {clean['amount']/100:.2f} for {month}",
+                rec_id,
+            ),
+        )
+
     offer_template = _maybe_offer_quick_add(db, clean)
 
     db.commit()

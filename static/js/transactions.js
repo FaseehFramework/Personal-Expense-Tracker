@@ -16,6 +16,7 @@
     loan_repay_owed: "Loan repayment (I owe)",
     loan_lend: "Loan — lending out",
     loan_repay_received: "Loan repayment received",
+    receivable: "Receivable (reimbursable spend)",
   };
 
   const TYPE_ICON = {
@@ -28,6 +29,7 @@
     loan_repay_owed: "↩",
     loan_lend: "→",
     loan_repay_received: "↩",
+    receivable: "⟳",
   };
 
   async function ensureCategories() {
@@ -164,11 +166,12 @@
   function renderRow(t, trashMode) {
     const icon = TYPE_ICON[t.type] || "·";
     const catBadge = t.category ? `<span class="badge">${escapeHtml(t.category.name)}</span>` : `<span class="badge muted">Uncategorised</span>`;
+    const recBadge = t.type === "receivable" ? `<span class="badge badge-receivable">Receivable</span>` : "";
     return `<button class="tx-row neo-inset" data-tx="${t.id}">
       <span class="tx-icon" data-type="${t.type}">${icon}</span>
       <span class="tx-main">
         <span class="tx-desc">${escapeHtml(t.description)}</span>
-        <span class="tx-meta">${catBadge} <span class="pill pill-${t.source}">${t.source === "bank" ? "Bank" : "Petty"}</span>${t.attachment_path ? ' <span class="badge">📎</span>' : ""}${t.splits.length ? ` <span class="badge">${t.splits.length} splits</span>` : ""}</span>
+        <span class="tx-meta">${catBadge} ${recBadge} <span class="pill pill-${t.source}">${t.source === "bank" ? "Bank" : "Petty"}</span>${t.attachment_path ? ' <span class="badge">📎</span>' : ""}${t.splits.length ? ` <span class="badge">${t.splits.length} splits</span>` : ""}</span>
       </span>
       <span class="tx-amt">${fmtAED(t.amount)}</span>
     </button>`;
@@ -395,6 +398,12 @@
       <h2>${escapeHtml(t.description)}</h2>
       <p class="muted">${fmtDate(t.date)} • ${TX_TYPE_LABELS[t.type] || t.type} • ${t.source === "bank" ? "Bank" : "Petty Cash"} • ${escapeHtml(cat)}</p>
       <div class="detail-amount">${fmtAED(t.amount)}</div>
+      ${t.type === "receivable" ? `
+        <div class="linked-warn receivable-note">
+          ⟳ <strong>Receivable</strong> — this spend is off-budget and pending reimbursement.
+          To settle or convert it to an expense, go to
+          <a href="#/loans" class="tab-link" id="link-to-loans">Loans &amp; Receivables</a>.
+        </div>` : ""}
       ${t.memo ? `<p>${escapeHtml(t.memo)}</p>` : ""}
       ${splitsHTML}
       ${attachmentHTML}
@@ -406,6 +415,14 @@
       </div>`);
 
     document.getElementById("btn-close").addEventListener("click", m.close);
+    // Deep-link to Loans & Receivables tab from the receivable note.
+    document.getElementById("link-to-loans")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      m.close();
+      window.location.hash = "#/loans";
+    });
+
+
     const editBtn = document.getElementById("btn-edit");
     if (editBtn) editBtn.addEventListener("click", () => { m.close(); openForm(t.id, onChange); });
     const delBtn = document.getElementById("btn-del");

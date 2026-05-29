@@ -27,6 +27,7 @@ TX_TYPES = (
     "loan_repay_owed",
     "loan_lend",
     "loan_repay_received",
+    "receivable",   # off-budget reimbursable spend; deducts from wallet, zero budget impact
 )
 
 # Types whose `amount` reduces the unified monthly budget.
@@ -73,6 +74,14 @@ def effects(tx_type: str, source: str, amount: int) -> Tuple[int, int, int]:
         if source == "bank":
             return (amount, 0, 0)
         return (0, amount, 0)
+
+    if tx_type == "receivable":
+        # Money leaves a wallet (the spend happened) but is off-budget.
+        # If/when settled the reimbursement is credited back as income.
+        # If converted to expense the budget impact is applied retroactively.
+        if source == "bank":
+            return (-amount, 0, 0)
+        return (0, -amount, 0)
 
     raise ValueError(f"unknown transaction type: {tx_type}")
 

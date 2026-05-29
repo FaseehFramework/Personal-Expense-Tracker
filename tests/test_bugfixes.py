@@ -95,14 +95,29 @@ class TestStringMoney:
         assert tx["amount"] == 20000
 
     def test_receivable_amount_string(self, client):
+        """Receivables are now created via POST /api/transactions with type='receivable'.
+        The receivables row is auto-created and linked to the transaction."""
+        r = client.post("/api/transactions", json={
+            "description": "Work flight", "amount": "1200.50",
+            "date": "2026-05-01", "type": "receivable", "source": "bank",
+        })
+        assert r.status_code == 201, r.get_json()
+        tx = r.get_json()["transaction"]
+        assert tx["amount"] == 120050
+        assert tx["type"] == "receivable"
+        # Auto-created receivable should appear in the list.
+        recs = client.get("/api/receivables").get_json()
+        assert len(recs["receivables"]) == 1
+        assert recs["receivables"][0]["amount"] == 120050
+        assert recs["receivables"][0]["transaction_id"] == tx["id"]
+
+    def test_direct_receivable_create_returns_410(self, client):
+        """The old POST /api/receivables entry point is removed and returns 410 Gone."""
         r = client.post("/api/receivables", json={
             "description": "Work flight", "amount": "1200.50",
             "date": "2026-05-01", "month": "2026-05",
         })
-        assert r.status_code == 201
-        # Pull it back and verify.
-        recs = client.get("/api/receivables").get_json()
-        assert recs["receivables"][0]["amount"] == 120050
+        assert r.status_code == 410
 
     def test_budget_set_with_string(self, client):
         r = client.put("/api/budget/monthly", json={
