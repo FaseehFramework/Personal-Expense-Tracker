@@ -242,6 +242,13 @@ fieldset legend { font-weight: 600; color: var(--text); margin-bottom: 8px; }
 .badge-status-converted { background: #f3e8ff; color: #6b21a8; box-shadow: none; }
 .badge-status-partial { background: #fef9c3; color: #854d0e; box-shadow: none; }
 
+/* Off-Budget Expense styles */
+.badge-offbudget { background: #ede9fe; color: #5b21b6; box-shadow: none; font-weight: 600; }
+.tx-icon[data-type="expense_offbudget"] { color: #7c3aed; }
+.offbudget-note { color: #5b21b6; background: #ede9fe; box-shadow: none; border: 1px solid #ddd6fe; }
+.offbudget-note a { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.offbudget-banner { color: #5b21b6; background: #ede9fe; font-size: 0.92rem; }
+
 /* ---------- Quick-add chips ---------- */
 .quick-bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }

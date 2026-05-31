@@ -38,6 +38,14 @@ def summary():
     petty = bs.petty_balance(db)
     savings = bs.savings_balance(db)
 
+    # Off-budget expenses this month — purely informational display field.
+    off_budget_row = db.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM transactions "
+        "WHERE is_deleted = 0 AND strftime('%Y-%m', date) = ? AND type = 'expense_offbudget'",
+        (month,),
+    ).fetchone()
+    off_budget_spend = int(off_budget_row["s"] or 0)
+
     # "Saved this month" — conceptual display: 90% of current month's projected positive remainder.
     # Per spec §4 this is "Savings accumulated this month". If the month is in progress,
     # we show the projection; once closed, budget_history has the real number.
@@ -71,6 +79,8 @@ def summary():
         "savings_aed": str(fils_to_aed(savings)),
         "saved_this_month": saved_this_month,
         "saved_this_month_aed": str(fils_to_aed(saved_this_month)),
+        "off_budget_spend": off_budget_spend,
+        "off_budget_spend_aed": str(fils_to_aed(off_budget_spend)),
     })
 
 

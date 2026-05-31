@@ -27,7 +27,8 @@ TX_TYPES = (
     "loan_repay_owed",
     "loan_lend",
     "loan_repay_received",
-    "receivable",   # off-budget reimbursable spend; deducts from wallet, zero budget impact
+    "receivable",        # off-budget reimbursable spend; deducts wallet, zero budget
+    "expense_offbudget", # discretionary spend: deducts wallet, never touches budget/savings
 )
 
 # Types whose `amount` reduces the unified monthly budget.
@@ -79,6 +80,15 @@ def effects(tx_type: str, source: str, amount: int) -> Tuple[int, int, int]:
         # Money leaves a wallet (the spend happened) but is off-budget.
         # If/when settled the reimbursement is credited back as income.
         # If converted to expense the budget impact is applied retroactively.
+        if source == "bank":
+            return (-amount, 0, 0)
+        return (0, -amount, 0)
+
+    if tx_type == "expense_offbudget":
+        # Real spending that consciously bypasses the monthly budget.
+        # Deducts from the wallet (money did leave) but budget_delta = 0 always.
+        # Does not affect: remaining budget, per-day calc, month-end rollover,
+        # savings pot, cascade, or budget history.
         if source == "bank":
             return (-amount, 0, 0)
         return (0, -amount, 0)

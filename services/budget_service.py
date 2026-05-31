@@ -45,11 +45,12 @@ def bank_balance(db: sqlite3.Connection = None) -> int:
     db = db or get_db()
     # Inflows
     plus = _sum_tx(db, "(type='income_bank') OR (type='petty_to_bank') OR (type='loan_repay_received' AND source='bank')")
-    # Outflows
+    # Outflows — includes off-budget types (expense_offbudget, receivable) that
+    # deduct from the wallet even though they don't affect the monthly budget.
     minus = _sum_tx(
         db,
         "(type='transfer_bank_to_petty') OR "
-        "(type IN ('expense','recurring','loan_repay_owed','loan_lend') AND source='bank')",
+        "(type IN ('expense','recurring','loan_repay_owed','loan_lend','expense_offbudget','receivable') AND source='bank')",
     )
     return plus - minus
 
@@ -60,7 +61,7 @@ def petty_balance(db: sqlite3.Connection = None) -> int:
     minus = _sum_tx(
         db,
         "(type='petty_to_bank') OR "
-        "(type IN ('expense','recurring','loan_repay_owed','loan_lend') AND source='petty')",
+        "(type IN ('expense','recurring','loan_repay_owed','loan_lend','expense_offbudget','receivable') AND source='petty')",
     )
     return plus - minus
 

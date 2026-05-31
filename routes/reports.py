@@ -51,6 +51,14 @@ def month_summary(month: str):
         (month,),
     ).fetchone()["s"]
 
+    # Off-budget expenses for this month (informational — not part of budget figures).
+    off_budget = db.execute(
+        "SELECT COALESCE(SUM(amount),0) AS s FROM transactions "
+        "WHERE is_deleted=0 AND strftime('%Y-%m',date)=? AND type='expense_offbudget'",
+        (month,),
+    ).fetchone()["s"]
+    off_budget_spend = int(off_budget or 0)
+
     # Loan balances at this point (we use current state — loans have no per-month
     # snapshot in v1).
     loans = db.execute("SELECT direction, total_amount, id FROM loans").fetchall()
@@ -90,6 +98,8 @@ def month_summary(month: str):
         "cascade_out_aed": str(fils_to_aed(cascade_out)),
         "outstanding_receivables": int(rec_out),
         "outstanding_receivables_aed": str(fils_to_aed(rec_out)),
+        "off_budget_spend": off_budget_spend,
+        "off_budget_spend_aed": str(fils_to_aed(off_budget_spend)),
         "loans_owed_to_me": owed_to_me,
         "loans_owed_to_me_aed": str(fils_to_aed(owed_to_me)),
         "loans_i_owe": i_owe,
@@ -139,11 +149,18 @@ def compare_months():
         spent = bs.month_spend(m, db)
         hist = db.execute("SELECT savings_amount FROM budget_history WHERE month = ?", (m,)).fetchone()
         savings = int(hist["savings_amount"]) if hist else 0
+        off_b_row = db.execute(
+            "SELECT COALESCE(SUM(amount),0) AS s FROM transactions "
+            "WHERE is_deleted=0 AND strftime('%Y-%m',date)=? AND type='expense_offbudget'",
+            (m,),
+        ).fetchone()
+        off_budget = int(off_b_row["s"] or 0)
         data.append({
             "month": m,
             "budget": budget, "budget_aed": str(fils_to_aed(budget)),
             "spent": spent, "spent_aed": str(fils_to_aed(spent)),
             "savings": savings, "savings_aed": str(fils_to_aed(savings)),
+            "off_budget_spend": off_budget, "off_budget_spend_aed": str(fils_to_aed(off_budget)),
         })
     return jsonify(months=data)
 
@@ -166,32 +183,46 @@ def period_analysis():
     if dt: where.append("t.date <= ?"); params.append(dt)
     if source in ("bank", "petty"): where.append("t.source = ?"); params.append(source)
     if cat_id: where.append("t.category_id = ?"); params.append(cat_id)
-    placeholders = ",".join("?" * len(BUDGET_CONSUMING_TYPES))
+
+    # Include both budget-consuming and off-budget expense types in the pie.
+    pie_types = (*BUDGET_CONSUMING_TYPES, "expense_offbudget")
+    placeholders = ",".join("?" * len(pie_types))
     where.append(f"t.type IN ({placeholders})")
-    params.extend(BUDGET_CONSUMING_TYPES)
+    params.extend(pie_types)
 
     where_sql = " AND ".join(where)
     rows = db.execute(
-        f"SELECT t.category_id, c.name AS category_name, "
+        f"SELECT t.category_id, c.name AS category_name, t.type, "
         f"  COALESCE(SUM(t.amount), 0) AS total, COUNT(*) AS n "
         f"FROM transactions t LEFT JOIN categories c ON c.id = t.category_id "
-        f"WHERE {where_sql} GROUP BY t.category_id, c.name ORDER BY total DESC",
+        f"WHERE {where_sql} GROUP BY t.category_id, c.name, t.type ORDER BY total DESC",
         params,
     ).fetchall()
 
     slices = []
     grand_total = 0
+    off_budget_total = 0
     for r in rows:
         amt = int(r["total"])
         grand_total += amt
+        is_offbudget = r["type"] == "expense_offbudget"
+        if is_offbudget:
+            off_budget_total += amt
         slices.append({
             "category_id": r["category_id"],
             "category_name": r["category_name"] or "Uncategorised",
             "amount": amt,
             "amount_aed": str(fils_to_aed(amt)),
             "count": int(r["n"]),
+            "is_offbudget": is_offbudget,
         })
-    return jsonify(slices=slices, total=grand_total, total_aed=str(fils_to_aed(grand_total)))
+    return jsonify(
+        slices=slices,
+        total=grand_total,
+        total_aed=str(fils_to_aed(grand_total)),
+        off_budget_total=off_budget_total,
+        off_budget_total_aed=str(fils_to_aed(off_budget_total)),
+    )
 
 
 # ---------- CSV exports (§11.5) ----------
@@ -261,6 +292,7 @@ def export_summary():
         f"SELECT strftime('%Y-%m', t.date) AS month, t.source, IFNULL(c.name,'Uncategorised') AS category, "
         f"  SUM(CASE WHEN t.type IN ({consuming_in}) THEN t.amount ELSE 0 END) AS spend, "
         f"  SUM(CASE WHEN t.type IN ({income_in}) THEN t.amount ELSE 0 END) AS budget_income, "
+        f"  SUM(CASE WHEN t.type = 'expense_offbudget' THEN t.amount ELSE 0 END) AS offbudget_spend, "
         f"  COUNT(*) AS n "
         f"FROM transactions t LEFT JOIN categories c ON c.id = t.category_id "
         f"WHERE {where_sql} "
@@ -280,12 +312,13 @@ def export_summary():
 
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["month", "source", "category", "spend_AED", "budget_income_AED", "transactions"])
+    w.writerow(["month", "source", "category", "spend_AED", "budget_income_AED", "offbudget_spend_AED", "transactions"])
     for r in rows:
         w.writerow([
             r["month"], r["source"], r["category"],
             f"{int(r['spend'])/100:.2f}",
             f"{int(r['budget_income'])/100:.2f}",
+            f"{int(r['offbudget_spend'])/100:.2f}",
             r["n"],
         ])
     # Trailing budget-vs-actual block.

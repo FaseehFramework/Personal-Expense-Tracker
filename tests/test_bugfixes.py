@@ -241,3 +241,124 @@ class TestWishlistPreviewContract:
         # This is what the frontend would have hit with the NaN typo.
         r = client.get("/api/wishlist/999/preview")
         assert r.status_code == 404
+
+
+# ===== Off-Budget Expense (expense_offbudget) =====
+
+class TestOffBudgetExpense:
+    """Verify the expense_offbudget type:
+    - Deducts from source wallet.
+    - Does NOT deduct from the monthly budget.
+    - Appears in reports as off_budget_spend, separate from 'spent'.
+    - Appears in period analysis pie with is_offbudget=True.
+    - TX_TYPES and effects() return the right deltas.
+    """
+
+    def _get_summary(self, client, month="2026-05"):
+        return client.get(f"/api/budget/summary?month={month}").get_json()
+
+    def _get_report_summary(self, client, month="2026-05"):
+        return client.get(f"/api/reports/month-summary/{month}").get_json()
+
+    def test_tx_types_contains_expense_offbudget(self, client):
+        from services.tx_effects import TX_TYPES, effects
+        assert "expense_offbudget" in TX_TYPES
+
+    def test_effects_bank_deducts_wallet_not_budget(self, client):
+        from services.tx_effects import effects
+        bank_d, petty_d, budget_d = effects("expense_offbudget", "bank", 10000)
+        assert bank_d == -10000
+        assert petty_d == 0
+        assert budget_d == 0
+
+    def test_effects_petty_deducts_petty_not_budget(self, client):
+        from services.tx_effects import effects
+        bank_d, petty_d, budget_d = effects("expense_offbudget", "petty", 10000)
+        assert bank_d == 0
+        assert petty_d == -10000
+        assert budget_d == 0
+
+    def test_wallet_decrements_after_offbudget_expense(self, client):
+        before = self._get_summary(client)
+        bank_before = before["bank"]
+        # Log an off-budget expense from bank.
+        r = client.post("/api/transactions", json={
+            "date": "2026-05-15", "amount": "100", "type": "expense_offbudget",
+            "source": "bank", "description": "Concert ticket",
+        })
+        assert r.status_code == 201, r.get_json()
+        after = self._get_summary(client)
+        assert after["bank"] == bank_before - 10000  # AED 100 = 10000 fils
+
+    def test_budget_remaining_unchanged_after_offbudget_expense(self, client):
+        before = self._get_summary(client)
+        remaining_before = before["remaining"]
+        # Log an off-budget expense.
+        client.post("/api/transactions", json={
+            "date": "2026-05-15", "amount": "200", "type": "expense_offbudget",
+            "source": "bank", "description": "Holiday splurge",
+        })
+        after = self._get_summary(client)
+        # Budget remaining must be identical — off-budget does not touch it.
+        assert after["remaining"] == remaining_before
+
+    def test_spent_tile_unchanged_offbudget_not_counted(self, client):
+        """'spent' in the dashboard summary must not include off-budget expenses."""
+        before = self._get_summary(client)
+        spent_before = before["spent"]
+        client.post("/api/transactions", json={
+            "date": "2026-05-15", "amount": "150", "type": "expense_offbudget",
+            "source": "bank", "description": "Side trip",
+        })
+        after = self._get_summary(client)
+        assert after["spent"] == spent_before  # unchanged
+
+    def test_off_budget_spend_in_dashboard_summary(self, client):
+        """off_budget_spend appears in the dashboard summary response."""
+        client.post("/api/transactions", json={
+            "date": "2026-05-10", "amount": "300", "type": "expense_offbudget",
+            "source": "bank", "description": "Discretionary",
+        })
+        summary = self._get_summary(client)
+        assert "off_budget_spend" in summary
+        assert summary["off_budget_spend"] == 30000
+
+    def test_off_budget_spend_in_month_summary_report(self, client):
+        """off_budget_spend is returned by /api/reports/month-summary."""
+        client.post("/api/transactions", json={
+            "date": "2026-05-12", "amount": "250", "type": "expense_offbudget",
+            "source": "petty", "description": "Gift",
+        })
+        rpt = self._get_report_summary(client)
+        assert "off_budget_spend" in rpt
+        assert rpt["off_budget_spend"] == 25000
+        # 'spent' must not include it.
+        assert rpt["spent"] == 0
+
+    def test_off_budget_appears_in_period_analysis(self, client):
+        """expense_offbudget transactions appear in the period analysis pie."""
+        client.post("/api/transactions", json={
+            "date": "2026-05-08", "amount": "180", "type": "expense_offbudget",
+            "source": "bank", "description": "Impulse buy",
+        })
+        r = client.get("/api/reports/period?from=2026-05-01&to=2026-05-31")
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["off_budget_total"] == 18000
+        # At least one slice must be marked is_offbudget.
+        offbudget_slices = [s for s in body["slices"] if s["is_offbudget"]]
+        assert len(offbudget_slices) >= 1
+
+    def test_regular_expense_not_tagged_offbudget_in_period(self, client):
+        """Normal expenses must not have is_offbudget=True."""
+        client.post("/api/transactions", json={
+            "date": "2026-05-08", "amount": "100", "type": "expense",
+            "source": "bank", "description": "Groceries",
+        })
+        r = client.get("/api/reports/period?from=2026-05-01&to=2026-05-31")
+        body = r.get_json()
+        budget_slices = [s for s in body["slices"] if not s["is_offbudget"]]
+        assert len(budget_slices) >= 1
+        for s in budget_slices:
+            assert s["is_offbudget"] is False
+

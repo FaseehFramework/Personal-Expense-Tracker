@@ -11,6 +11,7 @@
     income_petty_external: "Income (Petty — external)",
     petty_to_bank: "Petty → Bank deposit",
     expense: "Expense",
+    expense_offbudget: "Off-Budget Expense",
     transfer_bank_to_petty: "Transfer (Bank → Petty)",
     recurring: "Recurring (manual)",
     loan_repay_owed: "Loan repayment (I owe)",
@@ -21,6 +22,7 @@
 
   const TYPE_ICON = {
     expense: "−",
+    expense_offbudget: "−",
     recurring: "↻",
     income_bank: "+",
     income_petty_external: "+",
@@ -167,11 +169,12 @@
     const icon = TYPE_ICON[t.type] || "·";
     const catBadge = t.category ? `<span class="badge">${escapeHtml(t.category.name)}</span>` : `<span class="badge muted">Uncategorised</span>`;
     const recBadge = t.type === "receivable" ? `<span class="badge badge-receivable">Receivable</span>` : "";
+    const offBudgetBadge = t.type === "expense_offbudget" ? `<span class="badge badge-offbudget">Off-Budget</span>` : "";
     return `<button class="tx-row neo-inset" data-tx="${t.id}">
       <span class="tx-icon" data-type="${t.type}">${icon}</span>
       <span class="tx-main">
         <span class="tx-desc">${escapeHtml(t.description)}</span>
-        <span class="tx-meta">${catBadge} ${recBadge} <span class="pill pill-${t.source}">${t.source === "bank" ? "Bank" : "Petty"}</span>${t.attachment_path ? ' <span class="badge">📎</span>' : ""}${t.splits.length ? ` <span class="badge">${t.splits.length} splits</span>` : ""}</span>
+        <span class="tx-meta">${catBadge} ${recBadge}${offBudgetBadge} <span class="pill pill-${t.source}">${t.source === "bank" ? "Bank" : "Petty"}</span>${t.attachment_path ? ' <span class="badge">📎</span>' : ""}${t.splits.length ? ` <span class="badge">${t.splits.length} splits</span>` : ""}</span>
       </span>
       <span class="tx-amt">${fmtAED(t.amount)}</span>
     </button>`;
@@ -403,6 +406,11 @@
           ⟳ <strong>Receivable</strong> — this spend is off-budget and pending reimbursement.
           To settle or convert it to an expense, go to
           <a href="#/loans" class="tab-link" id="link-to-loans">Loans &amp; Receivables</a>.
+        </div>` : ""}
+      ${t.type === "expense_offbudget" ? `
+        <div class="linked-warn offbudget-note">
+          ★ <strong>Off-Budget Expense</strong> — this expense deducts from your wallet
+          but does not count against your monthly budget, per-day figure, or savings pot.
         </div>` : ""}
       ${t.memo ? `<p>${escapeHtml(t.memo)}</p>` : ""}
       ${splitsHTML}

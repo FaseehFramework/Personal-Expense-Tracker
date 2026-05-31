@@ -101,7 +101,12 @@
         ${miniTile("Outstanding receivables", fmtAED(d.outstanding_receivables))}
         ${miniTile("Loans they owe me", fmtAED(d.loans_owed_to_me))}
         ${miniTile("Loans I owe", fmtAED(d.loans_i_owe))}
-      </div>`;
+      </div>
+      ${d.off_budget_spend > 0 ? `
+        <div class="offbudget-banner" style="margin-top:14px;border-radius:12px;padding:12px 16px">
+          ✦ <strong>Off-Budget Spending: ${fmtAED(d.off_budget_spend)}</strong>
+          <span class="muted"> — not included in budget, variance, or savings figures above</span>
+        </div>` : ""}`;
   }
 
   function miniTile(label, value, cls = "") {
@@ -118,12 +123,14 @@
     const out = document.getElementById("cmp-out");
     if (!r.ok) { out.innerHTML = `<div class="empty-state">${r.data?.error || "Failed"}</div>`; return; }
     if (!r.data.months.length) { out.innerHTML = `<p class="muted">Not enough data yet — check back after at least 2 completed months.</p>`; return; }
+    const hasOffBudget = r.data.months.some(m => m.off_budget_spend > 0);
     const groups = r.data.months.map(m => ({
       label: m.month,
       bars: [
-        { label: "Budget", value: m.budget, color: "#3d6ae6" },
-        { label: "Spent",  value: m.spent,  color: "#c87f0a" },
-        { label: "Saved",  value: m.savings, color: "#2e8b57" },
+        { label: "Budget", value: m.budget,  color: "#3d6ae6" },
+        { label: "Spent",  value: m.spent,   color: "#c87f0a" },
+        { label: "Saved",  value: m.savings,  color: "#2e8b57" },
+        ...(hasOffBudget ? [{ label: "Off-Budget", value: m.off_budget_spend, color: "#7c3aed" }] : []),
       ],
     }));
     out.innerHTML = window.Charts.barGroup(groups);
@@ -139,8 +146,17 @@
     const out = document.getElementById("pa-out");
     if (!r.ok) { out.innerHTML = `<div class="empty-state">Failed</div>`; return; }
     if (!r.data.slices.length) { out.innerHTML = `<p class="muted">Not enough data yet — check back after at least 1 transaction in the selected period.</p>`; return; }
-    const slices = r.data.slices.map(s => ({ label: s.category_name, value: s.amount }));
-    out.innerHTML = `<p class="muted">Total: <strong>${fmtAED(r.data.total)}</strong></p>` + window.Charts.pie(slices);
+    const slices = r.data.slices.map(s => ({
+      label: s.is_offbudget ? `${s.category_name} ★` : s.category_name,
+      value: s.amount,
+      color: s.is_offbudget ? "#7c3aed" : undefined,
+    }));
+    const offNote = r.data.off_budget_total > 0
+      ? ` <span class="badge badge-offbudget" style="font-size:0.82rem">★ ${fmtAED(r.data.off_budget_total)} off-budget included</span>`
+      : "";
+    out.innerHTML =
+      `<p class="muted">Total: <strong>${fmtAED(r.data.total)}</strong>${offNote}</p>` +
+      window.Charts.pie(slices);
   }
 
   async function loadHistory() {

@@ -35,6 +35,11 @@
         ${tile("Petty cash", fmtAED(data.petty), "")}
         ${tile("Saved this month", fmtAED(data.saved_this_month), savingsSub, savingsTileCls)}
       </div>
+      ${data.off_budget_spend > 0 ? `
+      <div class="neo-card offbudget-banner">
+        ✦ <strong>${fmtAED(data.off_budget_spend)}</strong> off-budget spending this month
+        <span class="muted">(not counted against your budget)</span>
+      </div>` : ""}
       <div class="neo-card upcoming-recurring">
         <h3>Upcoming this month</h3>
         <p class="muted" id="upcoming-line"></p>
